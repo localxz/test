@@ -100,7 +100,12 @@ def get_loader(
     # --- END OF CORRECTION ---
 
     loader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=is_train, num_workers=4, pin_memory=True
+        dataset,
+        batch_size=batch_size,
+        shuffle=is_train,
+        num_workers=4,
+        pin_memory=True,
+        drop_last=True,
     )
 
     return loader

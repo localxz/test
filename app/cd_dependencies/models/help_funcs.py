@@ -18,7 +18,7 @@ class TwoLayerConv2d(nn.Sequential):
                 stride=1,
                 bias=False,
             ),
-            nn.InstanceNorm2d(in_channels),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(in_channels),  # <-- Reverted
             nn.ReLU(),
             nn.Conv2d(
                 in_channels,
@@ -28,6 +28,22 @@ class TwoLayerConv2d(nn.Sequential):
                 stride=1,
             ),
         )
+
+
+class Classifier(nn.Module):
+    def __init__(self, in_chan=32, n_class=2):
+        super(Classifier, self).__init__()
+        self.head = nn.Sequential(
+            nn.Conv2d(
+                in_chan * 2, in_chan, kernel_size=3, padding=1, stride=1, bias=False
+            ),
+            nn.BatchNorm2d(in_chan),  # <-- Reverted
+            nn.ReLU(),
+            nn.Conv2d(in_chan, n_class, kernel_size=3, padding=1, stride=1),
+        )
+
+    def forward(self, x):
+        return self.head(x)
 
 
 # ... (rest of file) ...
@@ -745,20 +761,3 @@ class RCSA(nn.Module):
         out1 = self.conv1_rcsa(torch.add(self.ca_rcsa(x), self.sa_rcsa(x)))
         out = torch.add(x, out1)
         return out
-
-
-class Classifier(nn.Module):
-    def __init__(in_chan=32, n_class=2):
-        super(Classifier, self).__init__()
-        self.head = nn.Sequential(
-            nn.Conv2d(
-                in_chan * 2, in_chan, kernel_size=3, padding=1, stride=1, bias=False
-            ),
-            nn.InstanceNorm2d(in_chan),  # Replaced BatchNorm2d with InstanceNorm2d
-            nn.ReLU(),
-            nn.Conv2d(in_chan, n_class, kernel_size=3, padding=1, stride=1),
-        )
-
-    def forward(self, x):
-        x = self.head(x)
-        return x

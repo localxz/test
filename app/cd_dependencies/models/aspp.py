@@ -15,7 +15,7 @@ class Conv3Relu(nn.Module):
                 stride=(stride, stride),
                 bias=False,
             ),
-            nn.InstanceNorm2d(out_ch),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(out_ch),  # <-- Reverted to BatchNorm2d
             nn.ReLU(inplace=True),
         )
 
@@ -23,32 +23,30 @@ class Conv3Relu(nn.Module):
         return self.extract(x)
 
 
-# --- Start of Correction ---
-# The original nn.Sequential structure was causing InstanceNorm2d to be called on a 1x1 tensor.
-# By converting it to a standard nn.Module, we can control the forward pass and apply normalization
-# after upsampling.
+# In aspp.py
+# In aspp.py
 class ASPPPooling(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ASPPPooling, self).__init__()
-        self.pool = nn.AdaptiveAvgPool2d(1)
-        self.conv = nn.Conv2d(in_channels, out_channels, 1, bias=False)
-        self.norm = nn.InstanceNorm2d(out_channels)
-        self.relu = nn.ReLU()
+        # The checkpoint expects a simple sequential block, not a nested 'branch' module.
+        self.layers = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+        )
 
     def forward(self, x):
         size = x.shape[-2:]
-        # Apply pooling and convolution
-        x = self.pool(x)
-        x = self.conv(x)
-        # Upsample back to the original size BEFORE applying normalization
-        x = F.interpolate(x, size=size, mode="bilinear", align_corners=False)
-        # Now apply normalization and activation on the full-sized feature map
-        x = self.norm(x)
-        x = self.relu(x)
-        return x
-
-
-# --- End of Correction ---
+        # Access layers by index and reorder operations to prevent 1x1 error
+        pooled = self.layers[0](x)
+        conved = self.layers[1](pooled)
+        upsampled = F.interpolate(
+            conved, size=size, mode="bilinear", align_corners=False
+        )
+        normed = self.layers[2](upsampled)
+        relued = self.layers[3](normed)
+        return relued
 
 
 class RCSA_ASPP(nn.Module):
@@ -56,35 +54,35 @@ class RCSA_ASPP(nn.Module):
         super(RCSA_ASPP, self).__init__()
         self.branch1 = nn.Sequential(
             nn.Conv2d(dim_in, dim_out, 1, 1, padding=0, dilation=rate, bias=True),
-            nn.InstanceNorm2d(dim_out),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(dim_out, momentum=bn_mom),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
         self.branch2 = nn.Sequential(
             nn.Conv2d(
                 dim_in, dim_out, 3, 1, padding=2 * rate, dilation=2 * rate, bias=True
             ),
-            nn.InstanceNorm2d(dim_out),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(dim_out, momentum=bn_mom),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
         self.branch3 = nn.Sequential(
             nn.Conv2d(
                 dim_in, dim_out, 3, 1, padding=4 * rate, dilation=4 * rate, bias=True
             ),
-            nn.InstanceNorm2d(dim_out),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(dim_out, momentum=bn_mom),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
         self.branch4 = nn.Sequential(
             nn.Conv2d(
                 dim_in, dim_out, 3, 1, padding=8 * rate, dilation=8 * rate, bias=True
             ),
-            nn.InstanceNorm2d(dim_out),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(dim_out, momentum=bn_mom),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
         self.branch5 = ASPPPooling(dim_in, dim_out)
 
         self.conv_cat = nn.Sequential(
             nn.Conv2d(dim_out * 5, dim_out, 1, 1, padding=0, bias=True),
-            nn.InstanceNorm2d(dim_out),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(dim_out, momentum=bn_mom),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
         self.stage1_Conv2 = Conv3Relu(dim_in * 2, dim_in)
@@ -93,7 +91,6 @@ class RCSA_ASPP(nn.Module):
         self.stage4_Conv2 = Conv3Relu(dim_in * 2, dim_in)
 
     def forward(self, x):
-        # The forward pass logic of this module remains unchanged.
         out1 = self.branch1(x)
         out2 = self.branch2(x)
         out3 = self.branch3(x)

@@ -134,7 +134,7 @@ class DoubleConvolutionLayer(nn.Module):
                 dilation=1,
                 bias=True,
             ),
-            nn.InstanceNorm2d(n_channels_output),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(n_channels_output),  # <-- Reverted
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.05),
             AtrousSeparableConvolution(
@@ -146,19 +146,25 @@ class DoubleConvolutionLayer(nn.Module):
                 dilation=1,
                 bias=True,
             ),
-            nn.InstanceNorm2d(n_channels_output),  # Replaced BatchNorm2d
+            nn.BatchNorm2d(n_channels_output),  # <-- Reverted
             nn.ReLU(inplace=True),
             nn.Dropout2d(p=0.05),
         )
 
-    def forward(self, x):
-        """
-        Defines the flow of data in the DoubleConvolution object.
-        :param x: the input data given through the layer with n_channels_input channels
-        :return: x after passing through the layer with now n_channels_output channels.
-        """
-        x = self.double_layer(x)
-        return x
+    # ... rest of the class is the same
+
+
+class FinalLayer(nn.Module):
+    def __init__(self, input_channels, middle_channels, output_channels):
+        super(FinalLayer, self).__init__()
+        self.conv = nn.Sequential(
+            DoubleConvolutionLayer(input_channels, middle_channels),
+            nn.Conv2d(middle_channels, output_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(output_channels),  # <-- Reverted
+            nn.Sigmoid(),
+        )
+
+    # ... rest of the class is the same
 
 
 class Downscaling_layer(nn.Module):
@@ -265,24 +271,4 @@ class Bottleneck(nn.Module):
         :return: x after passing through the layer
         """
         x = self.layer(x)
-        return x
-
-
-class FinalLayer(nn.Module):
-    def __init__(self, input_channels, middle_channels, output_channels):
-        super(FinalLayer, self).__init__()
-        self.conv = nn.Sequential(
-            DoubleConvolutionLayer(input_channels, middle_channels),
-            nn.Conv2d(middle_channels, output_channels, kernel_size=3, padding=1),
-            nn.InstanceNorm2d(output_channels),  # Replaced BatchNorm2d
-            nn.Sigmoid(),
-        )
-
-    def forward(self, x):
-        """
-        Defines the flow of x through the layer.
-        :param x: input matrix given to the layer
-        :return: x after passing through the layer
-        """
-        x = self.conv(x)
         return x

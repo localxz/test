@@ -145,6 +145,49 @@ class CBAM(nn.Module):
         return x_out
 
 
+class EA(nn.Module):
+    def __init__(self, in_channels):
+        super(EA, self).__init__()
+
+        self.fusion_conv = nn.Sequential(
+            nn.Conv2d(in_channels * 2, in_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(in_channels),
+            nn.ReLU(inplace=True),
+        )
+
+        self.attention = nn.Sequential(
+            nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=1,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid(),
+        )
+
+        self.RCSA_rcsa = RCSA(in_channels)
+        self.out = Out(in_channels, 1)  # Assumes Out class is also in this file
+        self.g2 = nn.Parameter(torch.ones(1))
+
+    def forward(self, x, edge_feature):
+        residual = x
+        xsize = x.size()[2:]
+
+        edge_input = F.interpolate(
+            edge_feature, size=xsize, mode="bilinear", align_corners=True
+        )
+        input_feature = x * edge_input
+        fusion_feature = torch.cat([x, input_feature], dim=1)
+        fusion_feature = self.fusion_conv(fusion_feature)
+        attention_map = self.attention(fusion_feature)
+        fusion_feature = fusion_feature * attention_map
+        out = fusion_feature * self.g2 + residual
+        out = self.RCSA_rcsa(out)
+        return out, attention_map
+
+
 class Conv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super().__init__()
@@ -156,7 +199,7 @@ class Conv(nn.Module):
                 stride=stride,
                 padding=padding,
             ),
-            nn.InstanceNorm2d(out_channels),  # Replaced
+            nn.BatchNorm2d(out_channels),  # <-- Reverted
             nn.ReLU(inplace=True),
         )
 

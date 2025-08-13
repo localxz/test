@@ -149,7 +149,7 @@ class ResNet(torch.nn.Module):
         if backbone == "resnet18":
             self.resnet = models.resnet18(
                 nc=input_nc,
-                pretrained=True,
+                pretrained=False,
                 replace_stride_with_dilation=[False, True, True],
             )
         elif backbone == "resnet34":

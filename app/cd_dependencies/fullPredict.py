@@ -195,33 +195,6 @@ class CycleGANPredictor:
                 )
 
 
-def patch_model_in_memory(model):
-    # ... (function is unchanged, but print() is replaced with report()) ...
-    report("\n--- Applying In-Memory Patch to Change Detection Model ---")
-    patched = False
-    for submodule in model.modules():
-        if submodule.__class__.__name__ == "DFIM":
-            report("Found a 'DFIM' module to patch...")
-            try:
-                original_ca = submodule.ca
-                submodule.ca = nn.Sequential(
-                    original_ca[0],
-                    original_ca[1],
-                    original_ca[3],
-                    original_ca[4],
-                    original_ca[6],
-                )
-                report("  > Successfully patched the 'ca' submodule.")
-                patched = True
-            except Exception as e:
-                report(f"  > FAILED to patch 'DFIM' module. Error: {e}")
-    if patched:
-        report("--- In-Memory Patching Complete ---")
-    else:
-        report("--- WARNING: No 'DFIM' module was found or patched. ---")
-    return model
-
-
 def save_tensor_image(tensor, filepath):
     # ... (function is unchanged) ...
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -335,7 +308,6 @@ def main(args_list=None, reporter=None):
         args=cd_args, dataloader=cd_dataloader, reporter=reporter
     )
     cd_evaluator._load_checkpoint(checkpoint_name=os.path.basename(args.cd_checkpoint))
-    cd_evaluator.net_G = patch_model_in_memory(cd_evaluator.net_G)
     cd_evaluator.net_G.eval()
     report("\nChange Detection model set to evaluation mode.")
     report(f"\nProcessing {len(cd_dataloader.dataset)} image pairs...")
